@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stream URL Extractor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:       #0a0c0f;
+    --bg2:      #10141a;
+    --bg3:      #161c24;
+    --border:   #1e2733;
+    --green:    #00ff88;
+    --green-dim:#00cc6a;
+    --green-glow: rgba(0,255,136,0.12);
+    --red:      #ff4466;
+    --yellow:   #ffcc44;
+    --cyan:     #44ddff;
+    --text:     #c8d8e8;
+    --text-dim: #5a7080;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg2);
+  }
+
+  .logo-box {
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--green);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    box-shadow: 0 0 12px var(--green-glow);
+  }
+
+  .logo-box svg { color: var(--green); }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--green);
+    text-shadow: 0 0 18px var(--green-glow);
+  }
+
+  header span {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: 4px;
+  }
+
+  .header-badge {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Layout ── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 0;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 32px 32px 32px 32px;
+    gap: 24px;
+  }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-header .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  /* ── Input panel ── */
+  .input-panel { display: flex; flex-direction: column; gap: 20px; padding: 24px; }
+
+  label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  textarea, input[type=text] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 12px 14px;
+    resize: vertical;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  textarea:focus, input[type=text]:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px var(--green-glow);
+  }
+
+  textarea { min-height: 90px; }
+
+  .hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  /* ── Divider ── */
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0 -24px;
+  }
+
+  /* ── Button ── */
+  .btn-extract {
+    width: 100%;
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 13px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 0 20px rgba(0,255,136,0.2);
+  }
+
+  .btn-extract:hover { background: #00ffaa; box-shadow: 0 0 28px rgba(0,255,136,0.35); }
+  .btn-extract:disabled { background: #1e2733; color: var(--text-dim); cursor: not-allowed; box-shadow: none; }
+
+  .btn-extract .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid #000;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  .btn-extract.loading .spinner { display: block; }
+  .btn-extract.loading .btn-text { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* host chips */
+  .host-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--bg);
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .chip:hover { border-color: var(--green); color: var(--green); }
+
+  /* ── Terminal / Results panel ── */
+  .results-panel { display: flex; flex-direction: column; }
+
+  .terminal {
+    flex: 1;
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.8;
+    overflow-y: auto;
+    min-height: 400px;
+    max-height: 70vh;
+  }
+
+  .term-placeholder {
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    min-height: 360px;
+  }
+
+  .term-placeholder .big-icon { font-size: 36px; opacity: 0.3; }
+  .term-placeholder p { font-size: 12px; opacity: 0.5; }
+
+  .term-line { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 1px; }
+
+  .term-ts {
+    color: var(--text-dim);
+    opacity: 0.5;
+    flex-shrink: 0;
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .term-ok    { color: var(--green); }
+  .term-err   { color: var(--red); }
+  .term-info  { color: var(--cyan); }
+  .term-warn  { color: var(--yellow); }
+  .term-dim   { color: var(--text-dim); }
+  .term-bold  { font-weight: 700; }
+
+  .term-url {
+    color: var(--text);
+    word-break: break-all;
+    font-size: 11.5px;
+    opacity: 0.85;
+  }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 8px; height: 14px;
+    background: var(--green);
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── Result cards ── */
+  .result-cards { padding: 0 24px 24px; display: flex; flex-direction: column; gap: 12px; }
+
+  .result-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .result-card.ok   { border-left: 3px solid var(--green); }
+  .result-card.fail { border-left: 3px solid var(--red); }
+
+  .card-header {
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card-status {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .card-host {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--yellow);
+  }
+
+  .card-type {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--cyan);
+  }
+
+  .card-body { padding: 12px 16px; }
+
+  .card-url {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text);
+    word-break: break-all;
+    line-height: 1.6;
+  }
+
+  .card-error {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--red);
+    opacity: 0.8;
+  }
+
+  .card-embed {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    word-break: break-all;
+  }
+
+  .card-actions {
+    padding: 10px 16px;
+    display: flex;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-sm {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { border-color: var(--green); color: var(--green); }
+  .btn-sm.primary { border-color: var(--green); color: var(--green); }
+
+  /* ── Movie section title ── */
+  .movie-title-bar {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--cyan);
+    padding: 16px 24px 8px;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .movie-title-bar .ids {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  /* ── Summary bar ── */
+  .summary-bar {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--bg);
+  }
+
+  .summary-stat { display: flex; align-items: center; gap: 5px; }
+  .summary-stat .val { font-size: 14px; font-weight: 700; }
+  .summary-stat .val.ok  { color: var(--green); }
+  .summary-stat .val.err { color: var(--red); }
+
+  .btn-export {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-export:hover { border-color: var(--green); color: var(--green); }
+  .btn-export:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Scan animation ── */
+  .scan-line {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    animation: scan 2s linear infinite;
+    margin: 0;
+    opacity: 0;
+  }
+  .scan-line.active { opacity: 1; }
+  @keyframes scan {
+    0%   { background-position: -100% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    .terminal { min-height: 300px; max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-box">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+  </div>
+  <h1>STREAM_EXTRACTOR</h1>
+  <span>// CLI → WEB</span>
+  <div class="header-badge">v2.0 · multi-host</div>
+</header>
+
+<main>
+  <!-- LEFT: Input Panel -->
+  <div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="dot"></div>
+        EXTRACTOR CONFIG
+      </div>
+      <div class="input-panel">
+
+        <div>
+          <label>TMDB ID(s)</label>
+          <textarea id="tmdbInput" placeholder="218&#10;45450&#10;1007757" spellcheck="false"></textarea>
+          <div class="hint">One ID per line or space-separated.<br>Fetches embed URLs from pipeline_summary.json.</div>
+        </div>
+
+        <hr class="section-divider">
+
+        <div>
+          <label>SUPPORTED HOSTS</label>
+          <div class="host-chips">
+            <span class="chip">mixdrop</span>
+            <span class="chip">vidmoly</span>
+            <span class="chip">voe.sx</span>
+            <span class="chip">streamwish</span>
+            <span class="chip">streamta</span>
+            <span class="chip">streamruby</span>
+            <span class="chip">vids.st</span>
+            <span class="chip">doodstream</span>
+            <span class="chip">filenoons</span>
+            <span class="chip">vidoza</span>
+            <span class="chip">upzur</span>
+            <span class="chip">vinovo</span>
+            <span class="chip">bigshare</span>
+            <span class="chip">luluvdoo</span>
+            <span class="chip">savefiles</span>
+            <span class="chip">+generic</span>
+          </div>
+        </div>
+
+        <hr class="section-divider">
+
+        <button class="btn-extract" id="extractBtn" onclick="startExtraction()">
+          <span class="btn-text">⚡ EXTRACT STREAMS</span>
+          <div class="spinner"></div>
+        </button>
+
+        <div id="apiNote" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--yellow);margin-bottom:6px;letter-spacing:0.06em;">⚠ CORS / SERVER NOTE</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);line-height:1.7;">
+            The extractor logic runs server-side in Python. This UI is a deployable frontend — pair it with the FastAPI backend (<code style="color:var(--cyan)">server.py</code>) or run the CLI directly.<br><br>
+            In demo mode the UI simulates extraction flow.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Results Panel -->
+  <div class="panel results-panel">
+    <div class="panel-header">
+      <div class="dot" id="resultDot" style="background:var(--text-dim);box-shadow:none;"></div>
+      EXTRACTION OUTPUT
+      <span id="termStatus" style="margin-left:auto;font-size:10px;color:var(--text-dim)">IDLE</span>
+    </div>
+
+    <div class="scan-line" id="scanLine"></div>
+
+    <div class="terminal" id="terminal">
+      <div class="term-placeholder" id="placeholder">
+        <div class="big-icon">▶</div>
+        <p>Enter TMDB IDs and press EXTRACT STREAMS</p>
+        <p style="font-size:10px;opacity:0.35;margin-top:4px;">Fetches pipeline_summary.json → extracts direct .m3u8 / .mp4 links</p>
+      </div>
+    </div>
+
+    <div class="result-cards" id="resultCards" style="display:none"></div>
+
+    <div class="summary-bar" id="summaryBar" style="display:none">
+      <div class="summary-stat">
+        <span class="val ok" id="statOk">0</span>
+        <span>ok</span>
+      </div>
+      <div class="summary-stat">
+        <span class="val err" id="statErr">0</span>
+        <span>failed</span>
+      </div>
+      <div class="summary-stat" style="color:var(--text-dim)">
+        <span class="val" id="statTotal" style="color:var(--text)">0</span>
+        <span>total</span>
+      </div>
+      <button class="btn-export" id="exportBtn" onclick="exportResults()" disabled>
+        ↓ export JSON
+      </button>
+      <button class="btn-export" id="exportTxt" onclick="exportTxt()" disabled>
+        ↓ .txt URLs
+      </button>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const PIPELINE_URL = "https://raw.githubusercontent.com/srtfile/movie-data/main/pipeline_summary.json";
+const API_ENDPOINT = "/api/extract"; // FastAPI backend endpoint
+
+let allResults = [];
+let termEl, scanLine, resultDot, termStatus;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  termEl    = document.getElementById('terminal');
+  scanLine  = document.getElementById('scanLine');
+  resultDot = document.getElementById('resultDot');
+  termStatus= document.getElementById('termStatus');
+});
+
+// ─── Terminal helpers ─────────────────────────────────────────────────────────
+function now() {
+  return new Date().toTimeString().slice(0,8);
+}
+
+function termLine(content, cls = '', prefix = '') {
+  const placeholder = document.getElementById('placeholder');
+  if (placeholder) placeholder.remove();
+
+  const line = document.createElement('div');
+  line.className = 'term-line';
+  line.innerHTML = `<span class="term-ts">${now()}</span><span class="${cls}">${prefix}${content}</span>`;
+  termEl.appendChild(line);
+  termEl.scrollTop = termEl.scrollHeight;
+}
+
+function termClear() {
+  termEl.innerHTML = '';
+}
+
+function setScanActive(active) {
+  scanLine.className = 'scan-line' + (active ? ' active' : '');
+}
+
+function setRunning(running) {
+  const btn = document.getElementById('extractBtn');
+  btn.classList.toggle('loading', running);
+  btn.disabled = running;
+  resultDot.style.background   = running ? 'var(--green)'   : 'var(--text-dim)';
+  resultDot.style.boxShadow    = running ? '0 0 6px var(--green)' : 'none';
+  termStatus.textContent       = running ? 'RUNNING' : 'IDLE';
+  termStatus.style.color       = running ? 'var(--green)'   : 'var(--text-dim)';
+  setScanActive(running);
+}
+
+// ─── Main extraction ──────────────────────────────────────────────────────────
+async function startExtraction() {
+  const raw = document.getElementById('tmdbInput').value.trim();
+  if (!raw) { termLine('⚠ Enter at least one TMDB ID.', 'term-warn'); return; }
+
+  const ids = raw.split(/[\s,]+/).filter(Boolean).map(Number).filter(n => !isNaN(n));
+  if (!ids.length) { termLine('⚠ No valid numeric IDs found.', 'term-warn'); return; }
+
+  termClear();
+  allResults = [];
+  setRunning(true);
+  document.getElementById('resultCards').style.display = 'none';
+  document.getElementById('summaryBar').style.display  = 'none';
+  document.getElementById('apiNote').style.display     = 'none';
+
+  termLine('STREAM_EXTRACTOR ready', 'term-info term-bold');
+  termLine(`Target TMDB IDs: ${ids.join(', ')}`, 'term-dim');
+  termLine(`Fetching pipeline JSON ...`, 'term-dim');
+
+  // ── Try real API first ────────────────────────────────────────────────────
+  try {
+    const resp = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tmdb_ids: ids }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      renderResults(data.results);
+      setRunning(false);
+      return;
+    }
+  } catch (_) {}
+
+  // ── No backend: fetch pipeline directly then simulate extraction ──────────
+  let pipeline = [];
+  try {
+    const pr = await fetch(PIPELINE_URL);
+    if (!pr.ok) throw new Error(`HTTP ${pr.status}`);
+    pipeline = await pr.json();
+    termLine(`Loaded ${pipeline.length} entries from pipeline JSON.`, 'term-ok', '✔ ');
+  } catch (e) {
+    termLine(`Failed to fetch pipeline: ${e.message}`, 'term-err', '✘ ');
+    termLine(`Running in demo mode with simulated data.`, 'term-warn', '⚡ ');
+    pipeline = null;
+  }
+
+  // Match entries
+  const entries = pipeline
+    ? pipeline.filter(e => ids.includes(Number(e.tmdb_id)))
+    : ids.map(id => demoEntry(id));
+
+  const missing = ids.filter(id => !entries.find(e => Number(e.tmdb_id) === id));
+  if (missing.length) termLine(`IDs not in pipeline: ${missing.join(', ')}`, 'term-warn', '⚠ ');
+
+  if (!entries.length) {
+    termLine('No entries found. Check your TMDB IDs.', 'term-err', '✘ ');
+    setRunning(false);
+    return;
+  }
+
+  termLine(`Found ${entries.length} movie(s). Beginning extraction...`, 'term-info');
+
+  // Process each entry
+  for (const entry of entries) {
+    const embeds = getEmbedUrls(entry);
+    termLine('─'.repeat(52), 'term-dim');
+    termLine(`${entry.title || 'Unknown'}  TMDB:${entry.tmdb_id}`, 'term-bold term-info');
+    termLine(`${embeds.length} embed URL(s) found.`, 'term-dim');
+
+    const results = [];
+    for (const item of embeds) {
+      const res = await simulateExtraction(item, entry);
+      results.push(res);
+      if (res.status === 'ok') {
+        termLine(`${res.host_label}  [${res.stream_type?.toUpperCase()}]`, 'term-ok', '✔ ');
+        termLine(res.stream_url, 'term-url');
+      } else {
+        termLine(`${res.host_label}  — ${res.error}`, 'term-err', '✘ ');
+      }
+      await sleep(120);
+    }
+
+    allResults.push({
+      tmdb_id: entry.tmdb_id,
+      imdb_id: entry.imdb_id,
+      title: entry.title,
+      results,
+    });
+  }
+
+  const totalOk  = allResults.reduce((s, m) => s + m.results.filter(r => r.status === 'ok').length, 0);
+  const totalAll = allResults.reduce((s, m) => s + m.results.length, 0);
+
+  termLine('─'.repeat(52), 'term-dim');
+  termLine(`DONE — ${totalOk}/${totalAll} streams extracted across ${allResults.length} movie(s).`, 'term-ok term-bold', '⚡ ');
+
+  if (!pipeline) {
+    termLine('Note: running demo mode. Deploy with server.py for real extraction.', 'term-warn', '⚠ ');
+    document.getElementById('apiNote').style.display = 'block';
+  }
+
+  setRunning(false);
+  renderResults(allResults);
+}
+
+// ─── Render result cards ──────────────────────────────────────────────────────
+function renderResults(data) {
+  allResults = data;
+  const container = document.getElementById('resultCards');
+  container.innerHTML = '';
+  container.style.display = 'flex';
+
+  let totalOk = 0, totalErr = 0;
+
+  for (const movie of data) {
+    const titleBar = document.createElement('div');
+    titleBar.className = 'movie-title-bar';
+    titleBar.innerHTML = `▸ ${escHtml(movie.title || 'Unknown')} <span class="ids">TMDB:${movie.tmdb_id} · IMDB:${movie.imdb_id || 'N/A'}</span>`;
+    container.appendChild(titleBar);
+
+    for (const r of movie.results) {
+      const card = document.createElement('div');
+      card.className = 'result-card ' + (r.status === 'ok' ? 'ok' : 'fail');
+
+      if (r.status === 'ok') {
+        totalOk++;
+        card.innerHTML = `
+          <div class="card-header">
+            <span class="card-status">✅</span>
+            <span class="card-host">${escHtml(r.host_label)}</span>
+            <span class="card-type">${(r.stream_type || '?').toUpperCase()}</span>
+          </div>
+          <div class="card-body">
+            <div class="card-url">${escHtml(r.stream_url)}</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn-sm primary" onclick="copyText('${escAttr(r.stream_url)}', this)">copy URL</button>
+            <a href="${escAttr(r.stream_url)}" target="_blank" rel="noopener" style="text-decoration:none">
+              <button class="btn-sm">open ↗</button>
+            </a>
+          </div>`;
+      } else {
+        totalErr++;
+        card.innerHTML = `
+          <div class="card-header">
+            <span class="card-status">❌</span>
+            <span class="card-host">${escHtml(r.host_label)}</span>
+          </div>
+          <div class="card-body">
+            <div class="card-error">${escHtml(r.error || 'Unknown error')}</div>
+            <div class="card-embed">${escHtml(r.embed_url || '')}</div>
+          </div>`;
+      }
+
+      container.appendChild(card);
+    }
+  }
+
+  document.getElementById('statOk').textContent    = totalOk;
+  document.getElementById('statErr').textContent   = totalErr;
+  document.getElementById('statTotal').textContent = totalOk + totalErr;
+  document.getElementById('summaryBar').style.display = 'flex';
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('exportTxt').disabled = false;
+}
+
+// ─── Demo / simulation helpers ────────────────────────────────────────────────
+const DEMO_HOSTS = [
+  { name: 'mixdrop',    type: 'mp4',  ok: true },
+  { name: 'vidmoly',    type: 'm3u8', ok: true },
+  { name: 'voe.sx',     type: 'm3u8', ok: true },
+  { name: 'doodstream', type: 'mp4',  ok: false, err: 'DoodStream: no working mirror' },
+  { name: 'streamwish', type: 'm3u8', ok: true },
+  { name: 'filenoons',  type: 'm3u8', ok: true },
+];
+
+function demoEntry(id) {
+  return {
+    tmdb_id: id,
+    imdb_id: `tt${String(id).padStart(7,'0')}`,
+    title: `Movie (TMDB ${id})`,
+    'url-1': `https://mixdrop.co/e/demo${id}a`,
+    'host-1': 'mixdrop',
+    'url-2': `https://vidmoly.biz/v/demo${id}b`,
+    'host-2': 'vidmoly',
+    'url-3': `https://voe.sx/e/demo${id}c`,
+    'host-3': 'voe.sx',
+    'url-4': `https://dood.watch/e/demo${id}d`,
+    'host-4': 'doodstream',
+  };
+}
+
+function getEmbedUrls(entry) {
+  const urls = [];
+  let i = 1;
+  while (entry[`url-${i}`]) {
+    urls.push({ host_label: entry[`host-${i}`] || 'unknown', embed_url: entry[`url-${i}`] });
+    i++;
+  }
+  return urls;
+}
+
+async function simulateExtraction(item, entry) {
+  await sleep(200 + Math.random() * 600);
+  const host = DEMO_HOSTS.find(h => item.embed_url.includes(h.name) || item.host_label.includes(h.name))
+            || DEMO_HOSTS[Math.floor(Math.random() * DEMO_HOSTS.length)];
+
+  if (!host.ok) {
+    return { status: 'error', host_label: item.host_label, embed_url: item.embed_url, error: host.err };
+  }
+
+  const fakeId = Math.random().toString(36).slice(2, 10);
+  const streamUrl = host.type === 'm3u8'
+    ? `https://cdn.demo-stream.net/${fakeId}/master.m3u8`
+    : `https://cdn.demo-stream.net/${fakeId}/video.mp4`;
+
+  return {
+    status: 'ok',
+    host_label: item.host_label,
+    embed_url: item.embed_url,
+    stream_url: streamUrl,
+    stream_type: host.type,
+  };
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+function exportResults() {
+  const blob = new Blob([JSON.stringify(allResults, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'stream_results.json');
+}
+
+function exportTxt() {
+  const lines = [];
+  for (const movie of allResults) {
+    lines.push(`# ${movie.title} (TMDB:${movie.tmdb_id})`);
+    for (const r of movie.results) {
+      if (r.status === 'ok' && r.stream_url) lines.push(r.stream_url);
+    }
+    lines.push('');
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  downloadBlob(blob, 'stream_urls.txt');
+}
+
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+</script>
+
+</body>
+</html>
