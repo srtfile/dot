@@ -249,6 +249,10 @@ EXTRACTOR_MAP = {
     "generic":    extract_generic,
 }
 
+def _to_int(v):
+    try: return int(v)
+    except (TypeError, ValueError): return None
+
 def detect_host(url):
     host = urlparse(url).netloc.lower().lstrip("www.")
     for family, patterns in HOST_MAP.items():
@@ -320,7 +324,8 @@ def extract(req: ExtractRequest):
         raise HTTPException(503, f"Failed to fetch pipeline: {e}")
 
     tmdb_set = set(req.tmdb_ids)
-    entries = [e for e in pipeline if e.get("tmdb_id") in tmdb_set]
+    # Normalize: pipeline JSON may store tmdb_id as string or int
+    entries = [e for e in pipeline if _to_int(e.get("tmdb_id")) in tmdb_set]
     if not entries:
         raise HTTPException(404, f"No entries found for TMDB IDs: {req.tmdb_ids}")
 
