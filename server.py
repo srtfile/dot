@@ -233,11 +233,118 @@ def extract_generic(url):
         return {"url": combined[0], "type": "m3u8" if combined[0] in m3us else "mp4", "extra": combined}
     raise RuntimeError("Generic: no stream URL found")
 
+# ── DoodStream ────────────────────────────────────────────────────────────────
+# Flow: embed page → extract /pass_md5/<token> path → GET that path (with
+# Referer = embed URL) → response body is the base CDN URL → append 10
+# random alphanumerics + ?token=<token>&expiry=<ms_timestamp>
+def extract_doodstream(url):
+    # Normalise /d/ → /e/
+    url = re.sub(r'/(d|f)/', '/e/', url)
+    host = urlparse(url).scheme + "://" + urlparse(url).netloc
+    sess = _session({
+        "Referer":        host + "/",
+        "Accept-Language": "en-US,en;q=0.9",
+    })
+    r = sess.get(url, timeout=25); r.raise_for_status()
+    html = r.text
+
+    # Some dood mirrors redirect via JS
+    if 'location.href' in html:
+        new_url = re.search(r'location\.href\s*=\s*["\']([^"\']+)["\']', html)
+        if new_url:
+            r = sess.get(new_url.group(1), timeout=25); r.raise_for_status()
+            html = r.text
+
+    # pass_md5 path lives in the HTML, e.g.  $.get('/pass_md5/abc123/...'
+    pass_md5 = re.search(r'["\'](/pass_md5/[^"\']+)["\']', html)
+    if not pass_md5:
+        raise RuntimeError("DoodStream: pass_md5 path not found in page")
+
+    pass_url = host + pass_md5.group(1)
+    token    = pass_url.split("/")[-1]          # last segment IS the token
+
+    # Must send the embed URL as Referer when fetching pass_md5
+    r2 = sess.get(pass_url, headers={"Referer": url}, timeout=20)
+    r2.raise_for_status()
+    base_url = r2.text.strip()
+    if not base_url.startswith("http"):
+        raise RuntimeError(f"DoodStream: unexpected pass_md5 response: {base_url[:80]}")
+
+    rand_str  = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+    expiry    = str(int(time.time() * 1000))
+    final_url = base_url + rand_str + "?token=" + token + "&expiry=" + expiry
+
+    return {
+        "url":     final_url,
+        "type":    "mp4",
+        "headers": {"Referer": host + "/"},
+    }
+
+
+# ── WishEmbed family (LuluVDoo, FileLions, VidNest, StreamRuby, etc.) ─────────
+# These sites all share the same packed-JS / JWPlayer embed pattern.
+# Primary method: unpack eval(function…) → find hls/file key.
+# Fallback: direct regex on raw HTML.
+_WISHEMBED_MIRRORS = {
+    "luluvdoo":   "https://luluvdoo.com",
+    "filelions":  "https://filelions.to",
+    "vidnest":    "https://vidnest.io",
+    "streamruby": "https://streamruby.com",
+    "vids.st":    "https://vids.st",
+    "streamta":   "https://streamta.site",
+    "savefiles":  "https://savefiles.com",
+    "vinovo":     "https://vinovo.to",
+}
+
+def _wishembed_origin(url):
+    p = urlparse(url)
+    return p.scheme + "://" + p.netloc
+
+def extract_wishembed(url):
+    origin = _wishembed_origin(url)
+    sess   = _session({"Referer": origin + "/", "Origin": origin})
+    r      = sess.get(url, timeout=25); r.raise_for_status()
+    html   = r.text.replace("\\/", "/")
+
+    # 1. Try unpacking eval(function(p,a,c,k,e,d){...
+    packed = re.search(
+        r"(eval\(function\(p,a,c,k,e,d\)\{.*?\.split\('\|'\)[^)]*\)\))",
+        html, re.DOTALL)
+    text = html
+    if packed:
+        text = html + "\n" + unpack_packer(packed.group(1))
+
+    # 2. Look for hls / file keys in unpacked or raw text
+    # covers: "hls":"url", file:"url",  sources:[{file:"url"}]
+    for pat in [
+        r'"hls[234]?"\s*:\s*"(https?://[^"]+\.m3u8[^"]*)"',
+        r'["\']?file["\']?\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']',
+        r'source\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']',
+    ]:
+        m = re.search(pat, text)
+        if m:
+            return {"url": m.group(1), "type": "m3u8",
+                    "headers": {"Referer": origin + "/"}}
+
+    # 3. Fallback: any m3u8 in page
+    m3us = find_m3u8(text)
+    if m3us:
+        return {"url": m3us[0], "type": "m3u8",
+                "headers": {"Referer": origin + "/"}}
+
+    raise RuntimeError(f"WishEmbed ({urlparse(url).netloc}): no stream URL found")
+
+
 HOST_MAP = {
     "mixdrop":    ["mixdrop"],
     "vidmoly":    ["vidmoly"],
     "voe":        ["voe.sx", "kellywhatcould"],
     "streamwish": ["streamwish", "playnixes"],
+    "doodstream": ["dood.watch", "dood.so", "dood.la", "dood.cx",
+                   "dood.pm", "dood.sh", "dood.wf", "dood.re",
+                   "dooood.com", "doods.pro", "d0000d.com"],
+    "wishembed":  ["luluvdoo", "filelions", "vidnest", "streamruby",
+                   "vids.st", "streamta", "savefiles", "vinovo"],
     "generic":    [],
 }
 
@@ -246,6 +353,8 @@ EXTRACTOR_MAP = {
     "vidmoly":    extract_vidmoly,
     "voe":        extract_voe,
     "streamwish": extract_streamwish,
+    "doodstream": extract_doodstream,
+    "wishembed":  extract_wishembed,
     "generic":    extract_generic,
 }
 
