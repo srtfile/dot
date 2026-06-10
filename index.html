@@ -638,20 +638,30 @@ async function startExtraction() {
   termLine(`Fetching pipeline JSON ...`, 'term-dim');
 
   // ── Try real API first ────────────────────────────────────────────────────
-  try {
-    const resp = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tmdb_ids: ids }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      renderResults(data.results);
-      setRunning(false);
-      return;
+  const isFileProtocol = location.protocol === 'file:';
+  if (isFileProtocol) {
+    termLine('Opening as file:// — backend unavailable. Running pipeline+simulate mode.', 'term-warn', '⚠ ');
+  } else {
+    try {
+      const resp = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdb_ids: ids }),
+        signal: AbortSignal.timeout(60000),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        renderResults(data.results);
+        setRunning(false);
+        return;
+      } else {
+        const errText = await resp.text().catch(() => '');
+        termLine(`Backend returned ${resp.status}${errText ? ': ' + errText.slice(0,120) : ''}. Falling back to simulate.`, 'term-warn', '⚠ ');
+      }
+    } catch (err) {
+      termLine(`Backend unreachable (${err.message}). Falling back to simulate.`, 'term-warn', '⚠ ');
     }
-  } catch (_) {}
+  }
 
   // ── No backend: fetch pipeline directly then simulate extraction ──────────
   let pipeline = [];
